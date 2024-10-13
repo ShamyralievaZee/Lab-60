@@ -1,8 +1,36 @@
-import React, { useState} from "react";
+import React, { useState, useEffect, useCallback } from "react";
+
+interface IMessage {
+  id: string;
+  message: string;
+  author: string;
+  datetime: string;
+}
 
 const App = () => {
   const [author, setAuthor] = useState("");
   const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState<IMessage[]>([]);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
+  };
+
+  const fetchMessages = async (since?: string) => {
+    const url = `http://146.185.154.90:8000/messages${since ? `?datetime=${since}` : ""}`;
+    const response = await fetch(url);
+    const data: IMessage[] = await response.json();
+    return data;
+  };
+
+  const fetchNewMessages = useCallback(async () => {
+    const lastMessageDateTime = messages.length ? messages[messages.length - 1].datetime : undefined;
+    const newMessages = await fetchMessages(lastMessageDateTime);
+    if (newMessages.length > 0) {
+      setMessages((prev) => [...prev, ...newMessages]);
+    }
+  }, [messages]);
 
   const sendMessage = async () => {
     const data = new URLSearchParams();
@@ -21,7 +49,13 @@ const App = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await sendMessage();
+    await fetchNewMessages();
   };
+
+  useEffect(() => {
+    const intervalId = setInterval(fetchNewMessages, 3000);
+    return () => clearInterval(intervalId);
+  }, [fetchNewMessages]);
 
   return (
     <div className="container">
@@ -52,6 +86,15 @@ const App = () => {
         </div>
         <button type="submit" className="btn btn-dark m-4 mt-0">Send</button>
       </form>
+
+      <div id="receivedMessages">
+        {messages.map((msg) => (
+          <div key={msg.id} className="alert alert-primary m-4" role="alert">
+            <p>{formatDate(msg.datetime)}</p>
+            <p><strong>{msg.author}:</strong> {msg.message}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
